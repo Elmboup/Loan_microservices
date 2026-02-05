@@ -1,0 +1,158 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    networks:
+      - loan-net
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - loan-net
+
+  flower:
+    image: mher/flower:2.0
+    command: ["celery", "--broker=${CELERY_BROKER_URL}", "--port=5555", "flower"]
+    ports:
+      - "5555:5555"
+    env_file: .env.example
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  loan-service:
+    build:
+      context: .
+      dockerfile: services/loan-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8001:8000"
+    depends_on:
+      - rabbitmq
+    networks:
+      - loan-net
+
+  credit-service:
+    build:
+      context: .
+      dockerfile: services/credit-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8002:8000"
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  credit-worker:
+    build:
+      context: .
+      dockerfile: services/credit-service/Dockerfile
+    env_file: .env.example
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info"]
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  property-service:
+    build:
+      context: .
+      dockerfile: services/property-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8003:8000"
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  property-worker:
+    build:
+      context: .
+      dockerfile: services/property-service/Dockerfile
+    env_file: .env.example
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info"]
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  decision-service:
+    build:
+      context: .
+      dockerfile: services/decision-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8004:8000"
+    depends_on:
+      - rabbitmq
+    networks:
+      - loan-net
+
+  insurance-service:
+    build:
+      context: .
+      dockerfile: services/insurance-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8005:8000"
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  insurance-worker:
+    build:
+      context: .
+      dockerfile: services/insurance-service/Dockerfile
+    env_file: .env.example
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info"]
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - loan-net
+
+  agreement-service:
+    build:
+      context: .
+      dockerfile: services/agreement-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8006:8000"
+    depends_on:
+      - rabbitmq
+    networks:
+      - loan-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    env_file: .env.example
+    ports:
+      - "8007:8000"
+    depends_on:
+      - rabbitmq
+    networks:
+      - loan-net
+
+networks:
+  loan-net:
+    driver: bridge

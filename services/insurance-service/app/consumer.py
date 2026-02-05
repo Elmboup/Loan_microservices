@@ -17,7 +17,7 @@ def handle_event(event: dict) -> None:
     eligible = bool(payload.get("eligible", False))
     insurance_interest = bool(payload.get("insurance_interest", False))
     logger.info("received decision for loan %s", loan_id)
-    generate_quote.delay(loan_id, eligible, insurance_interest)
+    generate_quote.apply_async(args=[loan_id, eligible, insurance_interest], queue="insurance")
 
 
 def start() -> None:

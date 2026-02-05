@@ -77,3 +77,4 @@ Routing keys:
 ## Notes
 - Stockage en mémoire pour MVP (TODO DB).
 - Celery simule les traitements (sleep).
+- Les workers Celery utilisent des queues dédiées: `credit`, `property`, `insurance`.

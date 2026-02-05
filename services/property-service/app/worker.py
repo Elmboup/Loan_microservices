@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from celery import Celery
+from kombu import Queue
 
 from libs.common.logging import get_logger
 
@@ -11,6 +12,8 @@ from .publisher import publish_property_evaluated
 logger = get_logger("property-worker")
 
 celery_app = Celery("property-service", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
+celery_app.conf.task_queues = [Queue("property")]
+celery_app.conf.task_default_queue = "property"
 
 
 @celery_app.task(name="evaluate_property")

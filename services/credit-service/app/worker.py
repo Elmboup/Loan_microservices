@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from celery import Celery
+from kombu import Queue
 
 from libs.common.logging import get_logger
 
@@ -11,6 +12,8 @@ from .publisher import publish_credit_checked
 logger = get_logger("credit-worker")
 
 celery_app = Celery("credit-service", broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
+celery_app.conf.task_queues = [Queue("credit")]
+celery_app.conf.task_default_queue = "credit"
 
 
 @celery_app.task(name="check_credit")

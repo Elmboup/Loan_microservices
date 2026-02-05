@@ -16,7 +16,7 @@ def handle_event(event: dict) -> None:
     payload = event.get("payload", {})
     insurance_interest = bool(payload.get("insurance_interest", False))
     logger.info("received %s for loan %s", event.get("event_type"), loan_id)
-    evaluate_property.delay(loan_id, insurance_interest)
+    evaluate_property.apply_async(args=[loan_id, insurance_interest], queue="property")
 
 
 def start() -> None:

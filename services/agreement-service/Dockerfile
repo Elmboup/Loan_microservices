@@ -4,7 +4,7 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-COPY requirements.txt ./
+COPY services/agreement-service/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY libs /app/libs

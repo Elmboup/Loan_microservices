@@ -1,23 +1,48 @@
 from __future__ import annotations
 
-from typing import Optional
-from pydantic import BaseModel, Field
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel
+
+
+class LoanStatus(str, Enum):
+    CREATED = "CREATED"
+    DOCS_REQUESTED = "DOCS_REQUESTED"
+    DOCS_RECEIVED = "DOCS_RECEIVED"
+    EVALUATING = "EVALUATING"
+    ELIGIBLE = "ELIGIBLE"
+    NOT_ELIGIBLE = "NOT_ELIGIBLE"
+    ACCEPTANCE_SENT = "ACCEPTANCE_SENT"
+    AGREEMENT_PENDING = "AGREEMENT_PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
 
 
 class LoanCreate(BaseModel):
-    applicant_name: str
-    amount: float = Field(gt=0)
-    property_address: str
+    client_id: str
     insurance_interest: bool = False
+    documents: Optional[Dict[str, Any]] = None
 
 
-class Loan(BaseModel):
+class LoanDocuments(BaseModel):
+    documents: Dict[str, Any]
+
+
+class LoanSummary(BaseModel):
     loan_id: str
-    applicant_name: str
-    amount: float
-    property_address: str
+    status: LoanStatus
+    missing_documents: List[str]
+
+
+class LoanDetail(BaseModel):
+    loan_id: str
+    client_id: str
     insurance_interest: bool
-    status: str = "created"
+    documents: Dict[str, Any]
+    status: LoanStatus
+    missing_documents: List[str]
 
 
 class CreditResult(BaseModel):

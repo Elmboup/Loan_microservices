@@ -4,3 +4,4 @@ pika
 pydantic
 celery
 redis
+python-dotenv

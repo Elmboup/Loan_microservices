@@ -3,14 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
 from libs.common.logging import get_logger
+from libs.common.metrics import render_metrics
 
 from .consumer import start
 from .hub import Hub
+from .store import store
 
 logger = get_logger("notification-service")
 
@@ -31,6 +34,18 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/")
+def dashboard() -> Response:
+    html_path = Path(__file__).parent / "templates" / "index.html"
+    html = html_path.read_text(encoding="utf-8")
+    return Response(html, media_type="text/html")
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    return Response(render_metrics(), media_type="text/plain")
+
+
 @app.get("/events")
 async def sse_events():
     queue = await hub.register_sse()
@@ -45,6 +60,16 @@ async def sse_events():
             hub.unregister_sse(queue)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/loans")
+def list_loans() -> list[dict]:
+    return store.list_loans()
+
+
+@app.get("/loans/{loan_id}/events")
+def loan_events(loan_id: str) -> list[dict]:
+    return store.get_events(loan_id)
 
 
 @app.websocket("/ws/{loan_id}")

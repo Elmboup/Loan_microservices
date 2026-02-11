@@ -5,12 +5,12 @@ from typing import Dict
 
 class AgreementStore:
     def __init__(self) -> None:
-        self._agreements: Dict[str, str] = {}
+        self._agreements: Dict[str, dict] = {}
 
-    def set(self, loan_id: str, status: str) -> None:
-        self._agreements[loan_id] = status
+    def set(self, loan_id: str, agreement: dict) -> None:
+        self._agreements[loan_id] = agreement
 
-    def get(self, loan_id: str) -> str | None:
+    def get(self, loan_id: str) -> dict | None:
         return self._agreements.get(loan_id)
 
 

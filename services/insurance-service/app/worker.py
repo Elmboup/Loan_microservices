@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import time
 from celery import Celery
 from kombu import Queue
@@ -16,13 +17,19 @@ celery_app.conf.task_queues = [Queue("insurance")]
 celery_app.conf.task_default_queue = "insurance"
 
 
-@celery_app.task(name="generate_quote")
-def generate_quote(loan_id: str, eligible: bool, insurance_interest: bool) -> dict:
-    time.sleep(1)
-    if not eligible or not insurance_interest:
-        return {"skipped": True}
-    quote = 200 + (abs(hash(loan_id)) % 300)
-    payload = {"quote": quote}
+@celery_app.task(name="generate_insurance_quote")
+def generate_insurance_quote(loan_id: str, property_value: int | None = None) -> dict:
+    time.sleep(random.randint(2, 5))
+    if property_value is None:
+        quote_amount = 15000
+    else:
+        quote_amount = int(property_value * 0.0025)
+    payload = {
+        "quote_amount": quote_amount,
+        "currency": "XOF",
+        "provider": "MockAssureur",
+        "eligible": True,
+    }
     publish_quote_ready(loan_id, payload)
     logger.info("insurance quote ready for %s", loan_id)
     return payload

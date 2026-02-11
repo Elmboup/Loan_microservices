@@ -109,6 +109,8 @@ services:
       context: .
       dockerfile: services/insurance-service/Dockerfile
     env_file: .env.example
+    environment:
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "8005:8000"
     depends_on:
@@ -122,6 +124,8 @@ services:
       context: .
       dockerfile: services/insurance-service/Dockerfile
     env_file: .env.example
+    environment:
+      CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
     command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info", "-Q", "insurance"]
     depends_on:
       - rabbitmq

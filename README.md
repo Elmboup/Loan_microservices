@@ -1,162 +1,76 @@
 # Loan Microservices
 
-Monorepo Python pour un processus de demande de prêt immobilier en microservices.
+Monorepo Python (FastAPI) pour l'implementation d'un processus de demande de pret immobilier en microservices, avec RabbitMQ, Celery, SSE/WebSocket et dashboard de suivi.
 
-## Prérequis
-- Docker + Docker Compose
+## 1) Objectif du projet
 
-## Lancer
-```bash
-docker compose up --build
-```
+Ce projet couvre les attentes principales du TD3:
+- decomposition du processus en microservices
+- communication evenementielle via RabbitMQ
+- traitements asynchrones via Celery
+- mecanisme de compensation (Saga)
+- notifications temps reel (SSE + WebSocket)
+- dashboard de suivi
 
-## URLs utiles
-- Loan Service: http://localhost:8001/docs
-- Credit Service: http://localhost:8002/docs
-- Property Service: http://localhost:8003/docs
-- Decision Service: http://localhost:8004/docs
-- Insurance Service: http://localhost:8005/docs
-- Agreement Service: http://localhost:8006/docs
-- Notification Service: http://localhost:8007/docs
-- RabbitMQ UI: http://localhost:15672 (guest/guest)
-- Flower: http://localhost:5555
+## 2) Architecture
 
-## Scénario de test (happy path)
-1) Créer une demande de prêt
-```bash
-curl -s -X POST http://localhost:8001/loans \
-  -H 'Content-Type: application/json' \
-  -d '{"client_id":"client-123","insurance_interest":true}'
-```
-2) Suivre les événements via SSE
-```bash
-curl -N http://localhost:8007/events
-```
-3) Exemple WebSocket (wscat requis)
-```bash
-wscat -c ws://localhost:8007/ws/<loan_id>
-```
-4) Vérifier une décision
-```bash
-curl -s http://localhost:8004/decisions/<loan_id>
-```
+Services exposes:
+- `loan-service` (port `8001`): creation dossier, gestion des documents, statut global
+- `credit-service` (port `8002`): verification credit (asynchrone)
+- `property-service` (port `8003`): evaluation du bien (asynchrone)
+- `decision-service` (port `8004`): agrege credit + bien, publie decision
+- `insurance-service` (port `8005`): genere un devis assurance (asynchrone)
+- `agreement-service` (port `8006`): collecte accord/refus client final
+- `notification-service` (port `8007`): SSE, WebSocket, dashboard HTML
 
-## Tests rapides (complétude)
-1) Création incomplète (doit publier `loan.created` puis `loan.documents.requested`)
-```bash
-curl -s -X POST http://localhost:8001/loans \
-  -H 'Content-Type: application/json' \
-  -d '{"client_id":"client-abc","insurance_interest":false}'
-```
-2) Compléter les documents (doit publier `loan.documents.received`)
-```bash
-curl -s -X POST http://localhost:8001/loans/<loan_id>/documents \
-  -H 'Content-Type: application/json' \
-  -d '{"documents":{"id":"id.pdf","income_proof":"income.pdf","property_docs":"deed.pdf"}}'
-```
+Infrastructure:
+- RabbitMQ (broker d'evenements): `5672`, UI: `15672`
+- Redis (backend Celery)
+- Flower (monitoring Celery): `5555`
 
-## Tests rapides (decision-service)
-1) Créer un loan + compléter les docs (déclenche `credit.checked` et `property.evaluated`)
-```bash
-curl -s -X POST http://localhost:8001/loans \
-  -H 'Content-Type: application/json' \
-  -d '{"client_id":"client-xyz","insurance_interest":true}'
-```
-```bash
-curl -s -X POST http://localhost:8001/loans/<loan_id>/documents \
-  -H 'Content-Type: application/json' \
-  -d '{"documents":{"id":"id.pdf","income_proof":"income.pdf","property_docs":"deed.pdf"}}'
-```
-2) Vérifier les logs decision-service (`decision.made` + `loan.approved`/`loan.rejected`) et/ou SSE
-```bash
-curl -N http://localhost:8007/events
-```
-3) Vérifier la décision
-```bash
-curl -s http://localhost:8004/decisions/<loan_id>
-```
+## 3) Flux metier corrige (alignement BPMN)
 
-## Tests rapides (insurance-service)
-1) Créer un loan avec `insurance_interest=true` puis compléter les docs
-```bash
-curl -s -X POST http://localhost:8001/loans \
-  -H 'Content-Type: application/json' \
-  -d '{"client_id":"client-quote","insurance_interest":true}'
-```
-```bash
-curl -s -X POST http://localhost:8001/loans/<loan_id>/documents \
-  -H 'Content-Type: application/json' \
-  -d '{"documents":{"id":"id.pdf","income_proof":"income.pdf","property_docs":"deed.pdf"}}'
-```
-2) Observer l'événement `insurance.quote.ready` via SSE
-```bash
-curl -N http://localhost:8007/events
-```
-3) Vérifier l'API debug insurance
-```bash
-curl -s http://localhost:8005/insurance/<loan_id>
-```
+### Regle cle
+Les evaluations `credit` et `property` ne se declenchent **qu'apres** l'evenement `loan.documents.received`.
 
-## Tests rapides (agreement + finalisation)
-1) Créer un loan puis compléter les docs
-```bash
-curl -s -X POST http://localhost:8001/loans \
-  -H 'Content-Type: application/json' \
-  -d '{"client_id":"client-final","insurance_interest":true}'
-```
-```bash
-curl -s -X POST http://localhost:8001/loans/<loan_id>/documents \
-  -H 'Content-Type: application/json' \
-  -d '{"documents":{"id":"id.pdf","income_proof":"income.pdf","property_docs":"deed.pdf"}}'
-```
-2) Attendre `loan.approved` (via SSE) puis vérifier `acceptance.package.sent`
-```bash
-curl -N http://localhost:8007/events
-```
-3) Envoyer l'accord (accepté)
-```bash
-curl -s -X POST http://localhost:8006/loans/<loan_id>/agreement \
-  -H 'Content-Type: application/json' \
-  -d '{"accepted":true,"comment":"ok"}'
-```
-4) Vérifier `loan.final.approved` via SSE + statut `APPROVED` côté loan-service
-```bash
-curl -s http://localhost:8001/loans/<loan_id>
-```
-5) Tester un refus
-```bash
-curl -s -X POST http://localhost:8006/loans/<loan_id>/agreement \
-  -H 'Content-Type: application/json' \
-  -d '{"accepted":false,"comment":"no"}'
-```
-6) Vérifier `loan.cancelled` via SSE + statut `CANCELLED` côté loan-service
-```bash
-curl -s http://localhost:8001/loans/<loan_id>
-```
+Concretement:
+1. `POST /loans`
+2. `loan.created`
+3. si dossier incomplet -> `loan.documents.requested`
+4. quand dossier complet (`POST /loans/{id}/documents`) -> `loan.documents.received`
+5. ensuite seulement:
+   - `credit.checked`
+   - `property.evaluated`
+6. puis `decision.made` + `loan.approved` ou `loan.rejected`
+7. si approuve: `acceptance.package.sent`, puis accord client via `agreement-service`
+8. finalisation: `loan.final.approved` ou `loan.cancelled`
 
-## Contrats d’événements
+## 4) Evenements principaux
+
 Envelope commun:
+
 ```json
 {
   "event_id": "<uuid>",
   "event_type": "<routing_key>",
   "timestamp": "<iso>",
   "loan_id": "<uuid>",
-  "payload": {}
+  "payload": {},
+  "attempt": 0
 }
 ```
+
 Routing keys:
 - `loan.created`
-- `loan.documents.received`
 - `loan.documents.requested`
+- `loan.documents.received`
 - `credit.checked`
-- `credit.compensate`
-- `credit.compensated`
 - `property.evaluated`
-- `property.compensate`
 - `decision.made`
 - `loan.approved`
 - `loan.rejected`
+- `credit.compensate`
+- `credit.compensated`
 - `acceptance.package.sent`
 - `agreement.received`
 - `agreement.accepted`
@@ -165,58 +79,100 @@ Routing keys:
 - `loan.cancelled`
 - `insurance.quote.ready`
 
-## Endpoints principaux
-- Loan Service: `POST /loans`, `POST /loans/{id}/documents`, `GET /loans/{id}`
-- Credit Service: `GET /health`, `GET /debug`
-- Property Service: `GET /health`, `GET /debug`
-- Decision Service: `GET /health`, `GET /decisions/{loan_id}`
-- Insurance Service: `GET /health`
-- Agreement Service: `POST /loans/{id}/agreement`
-- Notification Service: `GET /events`, `GET /health`, `WS /ws/{loan_id}`
+## 5) Demarrage
 
-## Notes
-- Stockage en mémoire pour MVP (TODO DB).
-- Celery simule les traitements (sleep).
-- Les workers Celery utilisent des queues dédiées: `credit`, `property`, `insurance`.
+Prerequis:
+- Docker + Docker Compose
 
-## Compensation (Saga) + Fiabilité messages
-Mécanisme:
-- Si `property.evaluated` arrive avec `property_ok=false`, le `decision-service` publie `loan.rejected` et déclenche la compensation `credit.compensate`.
-- `credit-service` consomme `credit.compensate`, marque le crédit comme compensé et publie `credit.compensated` (optionnel).
-- Les statuts finaux (`REJECTED`, `CANCELLED`, `APPROVED`) ignorent les événements tardifs côté `loan-service`.
+Lancement:
 
-Durabilité, retries, DLQ:
-- Exchange durable: `events` (topic) + DLX `events.dlx` (direct).
-- Queues durables avec DLQ par service (`<service>.dlq`).
-- Ack explicite. En cas d’exception:
-  - retry jusqu’à 3 tentatives via `attempt` dans l’envelope
-  - puis `nack(requeue=False)` vers DLQ.
-
-Chaos testing:
-- `FAILURE_RATE_PROPERTY` et `FAILURE_RATE_CREDIT` (0..1) injectent des échecs.
-- Un échec publie `property_ok=false` ou `credit_ok=false` pour déclencher la compensation.
-
-## Tests (Saga + DLQ)
-1) Forcer un échec property
 ```bash
-export FAILURE_RATE_PROPERTY=1.0
-docker compose up --build
+docker compose up -d --build
 ```
-2) Créer un loan + compléter les docs
+
+Arret:
+
+```bash
+docker compose down
+```
+
+## 6) URLs utiles
+
+- Loan Service: http://localhost:8001/docs
+- Credit Service: http://localhost:8002/docs
+- Property Service: http://localhost:8003/docs
+- Decision Service: http://localhost:8004/docs
+- Insurance Service: http://localhost:8005/docs
+- Agreement Service: http://localhost:8006/docs
+- Notification Service: http://localhost:8007/docs
+- Dashboard: http://localhost:8007/
+- RabbitMQ UI: http://localhost:15672 (`guest/guest`)
+- Flower: http://localhost:5555
+
+## 7) Test de validation du flux corrige
+
+### Etape A - Creation dossier incomplet
+
 ```bash
 curl -s -X POST http://localhost:8001/loans \
   -H 'Content-Type: application/json' \
-  -d '{"client_id":"client-saga","insurance_interest":true}'
+  -d '{"client_id":"client-flow-test","insurance_interest":true}'
 ```
+
+Recuperer `loan_id`, puis verifier les evenements:
+
+```bash
+curl -s http://localhost:8007/loans/<loan_id>/events
+```
+
+Attendu a ce stade:
+- present: `loan.created`, `loan.documents.requested`
+- absent: `credit.checked`, `property.evaluated`, `decision.made`
+
+### Etape B - Completer les documents
+
 ```bash
 curl -s -X POST http://localhost:8001/loans/<loan_id>/documents \
   -H 'Content-Type: application/json' \
   -d '{"documents":{"id":"id.pdf","income_proof":"income.pdf","property_docs":"deed.pdf"}}'
 ```
-3) Observer via SSE: `loan.rejected` + `credit.compensate` + `credit.compensated`
+
+Puis:
+
 ```bash
-curl -N http://localhost:8007/events
+curl -s http://localhost:8007/loans/<loan_id>/events
 ```
-4) Tester DLQ (retries dépassés)
-- Simuler une exception non récupérable dans un handler.
-- Vérifier la queue `<service>.dlq` via RabbitMQ UI (http://localhost:15672).
+
+Attendu apres complementation:
+- `loan.documents.received`
+- `credit.checked`
+- `property.evaluated`
+- `decision.made`
+- puis `loan.approved`/`loan.rejected`
+
+## 8) Saga, durabilite, retries, DLQ
+
+- Exchange durable `events` (topic)
+- DLX: `events.dlx`
+- queues durables + DLQ par service (`<service>.dlq`)
+- ack explicite
+- retries par champ `attempt` (max 3)
+- echec final -> `nack(requeue=False)` vers DLQ
+
+Compensation implementee:
+- si `property.evaluated` arrive avec `property_ok=false`, le `decision-service` publie:
+  - `loan.rejected`
+  - `credit.compensate`
+- `credit-service` publie ensuite `credit.compensated`
+
+## 9) Monitoring
+
+- Flower: suivi des workers/taches Celery
+- endpoint `GET /metrics` sur chaque service
+- logs docker compose pour tracer les evenements
+
+## 10) Limites actuelles
+
+- stockage en memoire (pas de base persistante)
+- pas de tests automatises (pytest) pour l'instant
+- certains traitements sont simules (sleep) pour representer les taches longues

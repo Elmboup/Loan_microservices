@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from libs.common.events import LOAN_CREATED, LOAN_DOCUMENTS_RECEIVED
+from libs.common.events import LOAN_DOCUMENTS_RECEIVED
 from libs.common.rabbitmq import consume_events
 from libs.common.logging import get_logger
 
@@ -20,4 +20,4 @@ def handle_event(event: dict) -> None:
 
 
 def start() -> None:
-    consume_events(QUEUE_NAME, [LOAN_CREATED, LOAN_DOCUMENTS_RECEIVED], handle_event)
+    consume_events(QUEUE_NAME, [LOAN_DOCUMENTS_RECEIVED], handle_event)

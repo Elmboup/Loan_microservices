@@ -59,7 +59,13 @@ def create_loan(data: LoanCreate) -> LoanSummary:
     if missing_documents:
         publish_documents_requested(loan_id, {"missing_documents": missing_documents})
     else:
-        publish_documents_received(loan_id, {"documents_summary": {"provided": list(documents.keys())}})
+        publish_documents_received(
+            loan_id,
+            {
+                "documents_summary": {"provided": list(documents.keys())},
+                "insurance_interest": data.insurance_interest,
+            },
+        )
 
     return LoanSummary(loan_id=loan_id, status=status, missing_documents=missing_documents)
 
@@ -85,7 +91,11 @@ def upload_documents(loan_id: str, data: LoanDocuments) -> LoanSummary:
     if should_publish:
         if status == LoanStatus.DOCS_RECEIVED:
             publish_documents_received(
-                loan_id, {"documents_summary": {"provided": list(merged_documents.keys())}}
+                loan_id,
+                {
+                    "documents_summary": {"provided": list(merged_documents.keys())},
+                    "insurance_interest": loan.insurance_interest,
+                },
             )
         else:
             publish_documents_requested(loan_id, {"missing_documents": missing_documents})

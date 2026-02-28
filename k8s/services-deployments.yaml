@@ -1,0 +1,372 @@
+# deployments and services for each python microservice and corresponding Celery workers
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loan-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loan-service
+  template:
+    metadata:
+      labels:
+        app: loan-service
+    spec:
+      containers:
+        - name: loan-service
+          image: loan-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              value: "guest"
+            - name: RABBITMQ_PASS
+              value: "guest"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loan-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: loan-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: credit-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: credit-service
+  template:
+    metadata:
+      labels:
+        app: credit-service
+    spec:
+      containers:
+        - name: credit-service
+          image: credit-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              value: "guest"
+            - name: RABBITMQ_PASS
+              value: "guest"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: credit-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: credit-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: credit-worker
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: credit-worker
+  template:
+    metadata:
+      labels:
+        app: credit-worker
+    spec:
+      containers:
+        - name: credit-worker
+          image: credit-service:latest
+          command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info", "-Q", "credit"]
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              value: "guest"
+            - name: RABBITMQ_PASS
+              value: "guest"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/1"
+---
+# property service and worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: property-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: property-service
+  template:
+    metadata:
+      labels:
+        app: property-service
+    spec:
+      containers:
+        - name: property-service
+          image: property-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: property-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: property-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: property-worker
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: property-worker
+  template:
+    metadata:
+      labels:
+        app: property-worker
+    spec:
+      containers:
+        - name: property-worker
+          image: property-service:latest
+          command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info", "-Q", "property"]
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/1"
+---
+# decision
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decision-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: decision-service
+  template:
+    metadata:
+      labels:
+        app: decision-service
+    spec:
+      containers:
+        - name: decision-service
+          image: decision-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: decision-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: decision-service
+---
+# insurance and worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insurance-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: insurance-service
+  template:
+    metadata:
+      labels:
+        app: insurance-service
+    spec:
+      containers:
+        - name: insurance-service
+          image: insurance-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_BROKER_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: insurance-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: insurance-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insurance-worker
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: insurance-worker
+  template:
+    metadata:
+      labels:
+        app: insurance-worker
+    spec:
+      containers:
+        - name: insurance-worker
+          image: insurance-service:latest
+          command: ["celery", "-A", "app.worker.celery_app", "worker", "-l", "info", "-Q", "insurance"]
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_BROKER_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/1"
+---
+# agreement
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agreement-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agreement-service
+  template:
+    metadata:
+      labels:
+        app: agreement-service
+    spec:
+      containers:
+        - name: agreement-service
+          image: agreement-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agreement-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: agreement-service
+---
+# notification
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: loan-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: notification-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: loan-app
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: notification-service

@@ -221,8 +221,23 @@
           item.innerHTML = `<strong>${loanId.slice(0, 8)}...</strong><small>${state.statusByLoan[loanId] || 'UNKNOWN'}</small>`;
           item.onclick = () => {
             state.selectedLoanId = loanId;
-            renderLoans();
-            renderTimeline();
+            // if we haven't already loaded the history for that loan, fetch it
+            if (state.eventsByLoan[loanId].length === 0) {
+              fetch(`/loans/${loanId}/events`)
+                .then((res) => res.json())
+                .then((evts) => {
+                  state.eventsByLoan[loanId] = evts;
+                  renderLoans();
+                  renderTimeline();
+                })
+                .catch(() => {
+                  renderLoans();
+                  renderTimeline();
+                });
+            } else {
+              renderLoans();
+              renderTimeline();
+            }
           };
           loanListEl.appendChild(item);
         });

@@ -82,7 +82,7 @@ Routing keys:
 ## 5) Demarrage
 
 Prerequis:
-- Docker + Docker Compose
+- Docker + Docker Compose (pour développement local)
 
 Lancement:
 
@@ -95,6 +95,68 @@ Arret:
 ```bash
 docker compose down
 ```
+
+### 5a) Déploiement sur Kubernetes (Minikube)
+
+Un dossier `k8s/` contient des manifests prêts à l'emploi. Le flux est identique à Docker Compose mais chaque service tourne dans un pod, avec RabbitMQ et Redis déployés en tant que déploiements également.
+
+1. démarrez Minikube :
+   ```bash
+   minikube start
+   ```
+2. pointez votre shell sur le démon docker de Minikube afin de construire les images localement :
+   ```bash
+   eval "$(minikube docker-env)"
+   ```
+3. lancez le script de build et déploiement :
+   ```bash
+   cd k8s
+   ./deploy.sh
+   ```
+   Il reconstruit toutes les images (`loan-service:latest`, `credit-service:latest`, …) puis applique les manifests (`Namespace`, RabbitMQ, Redis, micro‑services + workers).
+4. vérifiez que les ressources sont en place :
+   ```bash
+   kubectl -n loan-app get pods,svc
+   ```
+5. pour accéder aux API en local vous pouvez utiliser `kubectl port-forward` ou créer un Ingress/NodePort. Par exemple :
+   ```bash
+   kubectl -n loan-app port-forward svc/loan-service 8001:8000
+   # puis ouvrir http://localhost:8001/docs
+   ```
+
+Cette configuration est spécialement conçue pour du développement local. Les images sont construites directement dans le daemon de Minikube et identifiées par leur tag `latest`.
+
+#### Passage à un cluster cloud (GKE, EKS, AKS...)
+
+Pour déployer en production sur un service managé (Google Kubernetes Engine par exemple) :
+
+1. **Préparez vos images** : poussez-les vers un registre accessible par le cluster (Google Container Registry, Docker Hub, …) :
+   ```bash
+   # depuis un shell local
+   docker build -t gcr.io/myproj/loan-service:1.0 -f services/loan-service/Dockerfile .
+   docker push gcr.io/myproj/loan-service:1.0
+   # idem pour chaque service et les workers
+   ```
+2. **Adaptez les manifests**
+   - remplacez les `image: loan-service:latest` par la référence complète du registre.
+   - gérez les `Secrets` (login RabbitMQ/Redis) plutôt que des variables en dur.
+   - configurez PersistentVolumes/PVC si vous souhaitez persister RabbitMQ/Redis ou utiliser un service managé.
+   - ajoutez des `Readiness`/`Liveness` probes, ressources, autoscaling.
+3. **Appliquez les manifests avec `kubectl`** sur votre cluster GKE :
+   ```bash
+   kubectl create namespace loan-app
+   kubectl -n loan-app apply -f k8s/namespace.yaml
+   kubectl -n loan-app apply -f k8s/rabbitmq-deployment.yaml
+   kubectl -n loan-app apply -f k8s/redis-deployment.yaml
+   kubectl -n loan-app apply -f k8s/services-deployments.yaml
+   ```
+4. **Exposez les services**
+   - utilisez un LoadBalancer/Ingress pour obtenir des URL publiques.
+   - configurez éventuellement un Ingress Controller (gd prêt sur GKE) et un certificat TLS.
+
+Les étapes de test (création de prêt, visualisation dashboard) restent identiques ; seule la connexion réseau change.
+
+> ➤ la partie `deploy.sh` peut être conservée pour les clusters locaux, ou convertie en CI/CD pipeline qui construit/push les images et applique les manifests automatiquement.
 
 ## 6) URLs utiles
 
